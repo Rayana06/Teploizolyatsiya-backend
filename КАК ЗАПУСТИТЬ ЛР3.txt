@@ -1,0 +1,17 @@
+Лабораторная работа №3
+
+API: http://127.0.0.1:3000/api/insulation-materials
+Adminer: http://127.0.0.1:8080
+MinIO: http://127.0.0.1:9011
+
+Откройте отдельный терминал и выполните:
+
+cd "/Users/rayanakhashieva/Documents/Codex Projects/РИП/insulation-backend-lab3"
+export PATH="/Users/rayanakhashieva/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH"
+docker compose up -d
+npm run build
+npm start
+
+Не закрывайте терминал, пока показываете лабораторную.
+Для остановки сервера нажмите Ctrl+C.
+Для остановки контейнеров выполните docker compose down.

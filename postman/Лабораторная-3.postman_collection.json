@@ -1,0 +1,135 @@
+{
+  "info": {
+    "_postman_id": "b0bf7f36-04d2-4d87-9564-3c9e1bb33003",
+    "name": "Лабораторная 3 — Теплощит REST API — 10 методов",
+    "description": "10 уникальных методов API: 3 GET, 5 POST, 1 PUT и 1 DELETE. Лента показывается одним GET-запросом с двумя вариантами URL, а лайк — одним POST-запросом со значением liked 1 или 0. Перед запуском выполните database/lab3-demo-reset.sql и выберите реальные файлы image/video в запросе создания.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "materialId", "value": "1" },
+    { "key": "imagePath", "value": "media/generated/technolight-optima-100-draft.jpg" },
+    { "key": "videoPath", "value": "media/generated/technolight-optima-100-draft.mp4" },
+    { "key": "registrationEmail", "value": "lab3.demo@teploshchit.local" }
+  ],
+  "item": [
+    {
+      "name": "01 — GET список услуг с фильтром",
+      "request": {
+        "description": "Первый из трёх GET-методов. Возвращает только опубликованные услуги. У каждого элемента ровно 7 полей; isCreator=1 означает, что создатель совпадает с текущим пользователем, 0 — не совпадает.",
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/insulation-materials?maxThicknessMm=80&insulationType=Минвата"
+      }
+    },
+    {
+      "name": "02 — GET лента (без id / по id, next=true)",
+      "request": {
+        "description": "Второй GET-метод. /feed без параметров начинает просмотр и возвращает первый опубликованный элемент. Для кнопки «Далее» обязательна пара: id текущего элемента и next=true. Ответ содержит ровно 9 полей; liked=1 означает, что текущий пользователь поставил лайк, liked=0 — не поставил. isCreator в ленту не передаётся.",
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/insulation-materials/feed"
+      }
+    },
+    {
+      "name": "03 — GET поля черновика без id",
+      "request": {
+        "description": "Третий и последний GET-метод. Идентификатор не передаётся: черновик определяется по текущему singleton-пользователю.",
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/insulation-materials/draft"
+      }
+    },
+    {
+      "name": "04 — POST добавить услугу с изображением и видео",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('Создан черновик', () => pm.response.to.have.status(201));",
+          "const json = pm.response.json();",
+          "pm.collectionVariables.set('materialId', json.id);"
+        ] }
+      }],
+      "request": {
+        "description": "Создаёт черновик. Поля image и video должны содержать настоящие локальные файлы, а не URL.",
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "name", "value": "Эковата Demo Lab 3", "type": "text" },
+            { "key": "shortDescription", "value": "Целлюлозный утеплитель для бесшовной теплоизоляции конструкций.", "type": "text" },
+            { "key": "insulationType", "value": "Эковата", "type": "text" },
+            { "key": "thicknessMm", "value": "150", "type": "text" },
+            { "key": "image", "type": "file", "src": "{{imagePath}}" },
+            { "key": "video", "type": "file", "src": "{{videoPath}}" }
+          ]
+        },
+        "url": "{{baseUrl}}/api/insulation-materials"
+      }
+    },
+    {
+      "name": "05 — PUT опубликовать услугу",
+      "request": {
+        "description": "Переводит собственный черновик из draft в published. Вернуть published обратно в draft нельзя.",
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": "{{baseUrl}}/api/insulation-materials/{{materialId}}/publish"
+      }
+    },
+    {
+      "name": "06 — DELETE логически удалить услугу",
+      "request": {
+        "description": "Soft delete: строка остаётся в БД, status становится deleted, completedAt вычисляется сервером.",
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/api/insulation-materials/{{materialId}}"
+      }
+    },
+    {
+      "name": "07 — POST поставить или отменить лайк",
+      "request": {
+        "description": "Один метод лайка. liked=1 создаёт связь в insulation_material_likes; liked=0 удаляет связь. Для демонстрации отмены измените только число в том же запросе.",
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"liked\": 1\n}" },
+        "url": "{{baseUrl}}/api/insulation-materials/{{materialId}}/like"
+      }
+    },
+    {
+      "name": "08 — POST зарегистрировать пользователя",
+      "event": [{
+        "listen": "prerequest",
+        "script": { "exec": [
+          "pm.collectionVariables.set('registrationEmail', `lab3.${Date.now()}@teploshchit.local`);"
+        ] }
+      }],
+      "request": {
+        "description": "Создаёт нового пользователя; открытый пароль в БД не сохраняется.",
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{registrationEmail}}\",\n  \"displayName\": \"Новый пользователь\",\n  \"password\": \"lab3-password\"\n}" },
+        "url": "{{baseUrl}}/api/users/register"
+      }
+    },
+    {
+      "name": "09 — POST аутентификация (заглушка ЛР4)",
+      "request": {
+        "description": "По условию лабораторной №3 это заглушка; полноценная авторизация появится в лабораторной №4.",
+        "method": "POST",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/users/authenticate"
+      }
+    },
+    {
+      "name": "10 — POST деавторизация (заглушка ЛР4)",
+      "request": {
+        "description": "По условию лабораторной №3 это заглушка выхода пользователя.",
+        "method": "POST",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/users/logout"
+      }
+    }
+  ]
+}

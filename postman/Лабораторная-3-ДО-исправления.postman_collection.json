@@ -1,0 +1,125 @@
+{
+  "info": {
+    "_postman_id": "730f8f2d-1670-49d7-a087-a6146e268137",
+    "name": "Лабораторная 3 — ДО исправления",
+    "description": "Старая версия коллекции для отчётности: лента и лайк/отмена ошибочно разделены на отдельные запросы.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "materialId", "value": "1" },
+    { "key": "imagePath", "value": "media/generated/technolight-optima-100-draft.jpg" },
+    { "key": "videoPath", "value": "media/generated/technolight-optima-100-draft.mp4" },
+    { "key": "registrationEmail", "value": "lab3.demo@teploshchit.local" }
+  ],
+  "item": [
+    {
+      "name": "01 — GET список услуг с фильтром",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/insulation-materials?maxThicknessMm=80&insulationType=Минвата"
+      }
+    },
+    {
+      "name": "02 — POST добавить услугу с изображением и видео",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "const json = pm.response.json();",
+          "pm.collectionVariables.set('materialId', json.id);"
+        ] }
+      }],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "name", "value": "Эковата Demo Lab 3", "type": "text" },
+            { "key": "shortDescription", "value": "Целлюлозный утеплитель для бесшовной теплоизоляции конструкций.", "type": "text" },
+            { "key": "insulationType", "value": "Эковата", "type": "text" },
+            { "key": "thicknessMm", "value": "150", "type": "text" },
+            { "key": "image", "type": "file", "src": "{{imagePath}}" },
+            { "key": "video", "type": "file", "src": "{{videoPath}}" }
+          ]
+        },
+        "url": "{{baseUrl}}/api/insulation-materials"
+      }
+    },
+    {
+      "name": "03 — GET поля черновика без id",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/insulation-materials/draft"
+      }
+    },
+    {
+      "name": "04 — PUT опубликовать услугу",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": "{{baseUrl}}/api/insulation-materials/{{materialId}}/publish"
+      }
+    },
+    {
+      "name": "05 — GET лента без id",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/insulation-materials/feed"
+      }
+    },
+    {
+      "name": "06 — GET лента по id, next=true",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/insulation-materials/feed/{{materialId}}?next=true"
+      }
+    },
+    {
+      "name": "07 — POST поставить лайк",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"liked\": 1\n}" },
+        "url": "{{baseUrl}}/api/insulation-materials/{{materialId}}/like"
+      }
+    },
+    {
+      "name": "08 — POST отменить лайк",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"liked\": 0\n}" },
+        "url": "{{baseUrl}}/api/insulation-materials/{{materialId}}/like"
+      }
+    },
+    {
+      "name": "09 — DELETE логически удалить услугу",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/api/insulation-materials/{{materialId}}"
+      }
+    },
+    {
+      "name": "10 — POST зарегистрировать пользователя",
+      "event": [{
+        "listen": "prerequest",
+        "script": { "exec": [
+          "pm.collectionVariables.set('registrationEmail', `lab3.${Date.now()}@teploshchit.local`);"
+        ] }
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{registrationEmail}}\",\n  \"displayName\": \"Новый пользователь\",\n  \"password\": \"lab3-password\"\n}" },
+        "url": "{{baseUrl}}/api/users/register"
+      }
+    }
+  ]
+}
