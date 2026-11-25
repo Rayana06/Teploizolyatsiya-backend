@@ -6,6 +6,7 @@ import { User } from '../database/entities/user.entity';
 import { AlignLab2Review1759200000000 } from '../database/migrations/1759200000000-align-lab2-review';
 import { CreateLab2Schema1757900000000 } from '../database/migrations/1757900000000-create-lab2-schema';
 import { AddLab3SystemFields1760000000000 } from '../database/migrations/1760000000000-add-lab3-system-fields';
+import { AddMaterialCardDetails1795600000000 } from '../database/migrations/1795600000000-add-material-card-details';
 import { InsulationMaterialsController } from './insulation-materials.controller';
 import { InsulationMaterialsApiController } from '../api/insulation-materials-api.controller';
 import { InsulationMaterialsApiService } from '../api/insulation-materials-api.service';
@@ -25,7 +26,7 @@ import { OptionalSessionGuard } from '../auth/optional-session.guard';
       password: process.env.POSTGRES_PASSWORD || 'teploshchit',
       database: process.env.POSTGRES_DB || 'teploshchit',
       entities: [User, InsulationMaterial, InsulationMaterialLike],
-      migrations: [CreateLab2Schema1757900000000, AlignLab2Review1759200000000, AddLab3SystemFields1760000000000],
+      migrations: [CreateLab2Schema1757900000000, AlignLab2Review1759200000000, AddLab3SystemFields1760000000000, AddMaterialCardDetails1795600000000],
       migrationsRun: true,
       synchronize: false,
       logging: process.env.TYPEORM_LOGGING === 'true',

@@ -6,9 +6,11 @@
     "build": "tsc -p tsconfig.json",
     "start": "node --env-file-if-exists=.env dist/main.js",
     "start:dev": "npm run build && npm start",
-    "test": "npm run build && node --env-file-if-exists=.env --experimental-strip-types --test --test-concurrency=1 test/lab4-auth.test.ts",
-    "services:up": "docker compose up -d",
-    "services:down": "docker compose down"
+    "test": "npm run build && node --env-file-if-exists=.env --experimental-strip-types --test --test-concurrency=1 test/*.test.ts",
+    "diagram:build": "node scripts/build-lab2-staruml.mjs",
+    "media:build": "node --experimental-strip-types scripts/build-insulation-media.ts",
+    "minio:up": "docker compose up -d",
+    "minio:seed": "node --experimental-strip-types --env-file=.env scripts/seed-insulation-minio.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.0",

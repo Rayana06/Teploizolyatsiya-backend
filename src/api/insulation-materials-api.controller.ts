@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query, Req, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, Req, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiCookieAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthenticatedRequest, SessionRequest } from '../auth/authenticated-request';
@@ -27,6 +27,8 @@ export class InsulationMaterialsApiController {
   @ApiQuery({ name: 'maxThicknessMm', required: false, type: Number, minimum: 1, maximum: 1000 })
   @ApiQuery({ name: 'insulationType', required: false, type: String, example: 'Минвата' })
   @ApiQuery({ name: 'search', required: false, type: String, example: 'Технолайт' })
+  @ApiQuery({ name: 'maxPriceRubM2', required: false, type: Number, example: 322.22 })
+  @ApiQuery({ name: 'view', required: false, enum: ['rich'], description: 'Расширенные поля React-карточки' })
   @ApiResponse({ status: 200, description: 'Список и количество услуг' })
   list(@Req() request: SessionRequest, @Query() query: Record<string, string | undefined>) {
     return this.service.list(query, request.currentUser?.userId);
@@ -39,9 +41,10 @@ export class InsulationMaterialsApiController {
   @ApiOperation({ summary: 'Получить элемент ленты; доступно гостю' })
   @ApiParam({ name: 'id', required: false, description: 'ID текущей услуги для перехода к следующей' })
   @ApiQuery({ name: 'next', required: false, enum: ['true'], description: 'Используется только вместе с id' })
+  @ApiQuery({ name: 'view', required: false, enum: ['rich'], description: 'Расширенные поля React-карточки' })
   @ApiResponse({ status: 200, description: 'Одна опубликованная услуга' })
-  feed(@Req() request: SessionRequest, @Param('id') id?: string, @Query('next') next?: string) {
-    return this.service.feed(id, next, request.currentUser?.userId);
+  feed(@Req() request: SessionRequest, @Param('id') id?: string, @Query('next') next?: string, @Query('view') view?: string) {
+    return this.service.feed(id, next, request.currentUser?.userId, view === 'rich');
   }
 
   // id не передаётся: черновик ищется по текущему пользователю из singleton-функции.
@@ -52,6 +55,28 @@ export class InsulationMaterialsApiController {
   @ApiResponse({ status: 401, description: 'Нет действующей сессии' })
   draft(@Req() request: AuthenticatedRequest) {
     return this.service.draft(request.currentUser.userId);
+  }
+
+  @Post('draft/start')
+  @UseGuards(SessionGuard)
+  @ApiCookieAuth('sessionId')
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Первый этап: название и необязательные фото/видео' })
+  @ApiBody({ schema: { type: 'object', required: ['name'], properties: { name: { type: 'string' }, image: { type: 'string', format: 'binary' }, video: { type: 'string', format: 'binary' } } } })
+  @UseInterceptors(FileFieldsInterceptor([{ name: 'image', maxCount: 1 }, { name: 'video', maxCount: 1 }], { limits: { fileSize: 20 * 1024 * 1024, files: 2 }, fileFilter: mediaFileFilter }))
+  startDraft(@Req() request: AuthenticatedRequest, @Body() body: Record<string, string>, @UploadedFiles() files: { image?: UploadedMediaFile[]; video?: UploadedMediaFile[] } = {}) {
+    if (files.image?.[0] && !files.image[0].mimetype.startsWith('image/')) throw new BadRequestException('Поле image должно содержать изображение');
+    if (files.video?.[0] && !files.video[0].mimetype.startsWith('video/')) throw new BadRequestException('Поле video должно содержать видео');
+    return this.service.startDraft(request.currentUser.userId, body, files.image?.[0], files.video?.[0]);
+  }
+
+  @Patch('draft/:id')
+  @UseGuards(SessionGuard)
+  @ApiCookieAuth('sessionId')
+  @ApiOperation({ summary: 'Второй этап: заполнить поля своего черновика' })
+  @ApiBody({ schema: { type: 'object', required: ['shortDescription', 'insulationType', 'thicknessMm', 'priceRubM2'], properties: { shortDescription: { type: 'string' }, insulationType: { type: 'string' }, thicknessMm: { type: 'integer' }, priceRubM2: { type: 'number' }, brand: { type: 'string' }, application: { type: 'string' } } } })
+  updateDraft(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.service.updateDraft(request.currentUser.userId, id, body);
   }
 
   // multipart/form-data позволяет принять обычные поля и настоящие файлы image/video.

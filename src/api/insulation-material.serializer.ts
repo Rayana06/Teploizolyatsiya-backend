@@ -10,7 +10,7 @@ export interface InsulationMaterialSerializationOptions {
 export class InsulationMaterialSerializer {
   constructor(private readonly storage: MinioStorageService) {}
 
-  serializeList(material: InsulationMaterial, options: InsulationMaterialSerializationOptions) {
+  serializeList(material: InsulationMaterial, options: InsulationMaterialSerializationOptions, rich = false) {
     // Каталогу нужны ровно 7 полей. isCreator относится именно к списку услуг:
     // 1 — услугу создал текущий пользователь, 0 — другой пользователь.
     return {
@@ -21,10 +21,18 @@ export class InsulationMaterialSerializer {
       thicknessMm: material.thicknessMm,
       likeCount: options.likeCount ?? 0,
       isCreator: options.currentUserId !== undefined && material.creatorId === options.currentUserId ? 1 : 0,
+      ...(rich ? {
+        brand: material.brand,
+        application: material.application,
+        priceRubM2: material.priceRubM2 === null ? null : Number(material.priceRubM2),
+        publishedAt: material.publishedAt,
+        shortDescription: material.shortDescription,
+        videoUrl: this.storage.publicObjectUrl(material.videoUrl),
+      } : {}),
     };
   }
 
-  serializeFeed(material: InsulationMaterial, options: InsulationMaterialSerializationOptions) {
+  serializeFeed(material: InsulationMaterial, options: InsulationMaterialSerializationOptions, rich = false) {
     // Ленте нужны ровно 9 полей. Здесь нет isCreator: вместо него лента получает
     // liked — отдельный признак 0/1, поставил ли текущий пользователь лайк.
     return {
@@ -37,6 +45,12 @@ export class InsulationMaterialSerializer {
       thicknessMm: material.thicknessMm,
       likeCount: options.likeCount ?? 0,
       liked: options.liked ? 1 : 0,
+      ...(rich ? {
+        brand: material.brand,
+        application: material.application,
+        priceRubM2: material.priceRubM2 === null ? null : Number(material.priceRubM2),
+        publishedAt: material.publishedAt,
+      } : {}),
     };
   }
 
@@ -62,6 +76,9 @@ export class InsulationMaterialSerializer {
       isCreator: options.currentUserId !== undefined && material.creatorId === options.currentUserId ? 1 : 0,
       likeCount: options.likeCount ?? 0,
       liked: options.liked ? 1 : 0,
+      brand: material.brand,
+      application: material.application,
+      priceRubM2: material.priceRubM2 === null ? null : Number(material.priceRubM2),
     };
   }
 }

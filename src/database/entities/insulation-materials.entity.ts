@@ -38,6 +38,15 @@ export class InsulationMaterial {
   @Column({ name: 'thickness_mm', type: 'smallint', nullable: true })
   thicknessMm!: number | null;
 
+  @Column({ name: 'price_rub_m2', type: 'numeric', precision: 10, scale: 2, nullable: true })
+  priceRubM2!: string | null;
+
+  @Column({ name: 'brand', type: 'varchar', length: 100, nullable: true })
+  brand!: string | null;
+
+  @Column({ name: 'application', type: 'varchar', length: 150, nullable: true })
+  application!: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

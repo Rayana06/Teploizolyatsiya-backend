@@ -45,7 +45,7 @@ export class InsulationMaterialsApiService {
       .where('material.status = :status', { status: InsulationMaterialStatus.Published });
   }
 
-  private async serializeList(query: SelectQueryBuilder<InsulationMaterial>, currentUserId?: number) {
+  private async serializeList(query: SelectQueryBuilder<InsulationMaterial>, currentUserId?: number, rich = false) {
     // Для каталога считаем лайки, но не ищем liked: этот признак относится к ленте.
     const entities = await query
       .loadRelationCountAndMap('material.insulationLikeCount', 'material.likes')
@@ -53,10 +53,10 @@ export class InsulationMaterialsApiService {
     return entities.map(material => this.serializer.serializeList(material, {
       currentUserId,
       likeCount: material.insulationLikeCount,
-    }));
+    }, rich));
   }
 
-  private async serializeFeed(query: SelectQueryBuilder<InsulationMaterial>, currentUserId?: number) {
+  private async serializeFeed(query: SelectQueryBuilder<InsulationMaterial>, currentUserId?: number, rich = false) {
     // Лента возвращает один элемент и отдельный признак liked: 0/1 для текущего пользователя.
     const entities = await query
       .loadRelationCountAndMap('material.insulationLikeCount', 'material.likes')
@@ -72,7 +72,7 @@ export class InsulationMaterialsApiService {
       currentUserId,
       likeCount: material.insulationLikeCount,
       liked: likedIds.has(material.insulationMaterialId),
-    }));
+    }, rich));
   }
 
   async list(query: Record<string, string | undefined>, currentUserId?: number) {
@@ -85,11 +85,16 @@ export class InsulationMaterialsApiService {
     }
     if (query.insulationType?.trim()) builder.andWhere('LOWER(material.insulationType) = LOWER(:insulationType)', { insulationType: query.insulationType.trim() });
     if (query.search?.trim()) builder.andWhere('LOWER(material.name) LIKE LOWER(:search)', { search: `%${query.search.trim()}%` });
-    const items = await this.serializeList(builder, currentUserId);
+    if (query.maxPriceRubM2 !== undefined) {
+      const maxPriceRubM2 = Number(query.maxPriceRubM2);
+      if (!Number.isFinite(maxPriceRubM2) || maxPriceRubM2 < 0) throw new BadRequestException('Некорректная максимальная цена');
+      builder.andWhere('material.priceRubM2 <= :maxPriceRubM2', { maxPriceRubM2 });
+    }
+    const items = await this.serializeList(builder, currentUserId, query.view === 'rich');
     return { items, count: items.length };
   }
 
-  async feed(rawId?: string, next?: string, currentUserId?: number) {
+  async feed(rawId?: string, next?: string, currentUserId?: number, rich = false) {
     // Без id и параметров начинается просмотр ленты: возвращается первый опубликованный элемент.
     // Для кнопки «Далее» обязательны одновременно id текущего элемента и next=true.
     if (next !== undefined && next !== 'true') throw new BadRequestException('next может быть только true');
@@ -101,11 +106,11 @@ export class InsulationMaterialsApiService {
     if (next === 'true') {
       items = await this.serializeFeed(this.publishedQuery()
         .andWhere('material.insulationMaterialId > :id', { id })
-        .orderBy('material.insulationMaterialId', 'ASC').take(1), currentUserId);
+        .orderBy('material.insulationMaterialId', 'ASC').take(1), currentUserId, rich);
       // Если курсор указывает на последний элемент, лента циклически возвращается к первому.
-      if (!items.length) items = await this.serializeFeed(this.publishedQuery().orderBy('material.insulationMaterialId', 'ASC').take(1), currentUserId);
+      if (!items.length) items = await this.serializeFeed(this.publishedQuery().orderBy('material.insulationMaterialId', 'ASC').take(1), currentUserId, rich);
     } else {
-      items = await this.serializeFeed(this.publishedQuery().orderBy('material.insulationMaterialId', 'ASC').take(1), currentUserId);
+      items = await this.serializeFeed(this.publishedQuery().orderBy('material.insulationMaterialId', 'ASC').take(1), currentUserId, rich);
     }
     if (!items.length) throw new NotFoundException('Услуга не найдена');
     return items[0];
@@ -115,6 +120,51 @@ export class InsulationMaterialsApiService {
     // Частичный уникальный индекс в БД и эта проверка обеспечивают не более одного черновика.
     const material = await this.materials.findOneBy({ creatorId: currentUserId, status: InsulationMaterialStatus.Draft });
     return material ? this.serializer.serialize(material, { currentUserId }) : null;
+  }
+
+  async startDraft(currentUserId: number, body: Record<string, unknown>, image?: UploadedMediaFile, video?: UploadedMediaFile) {
+    this.rejectSystemFields(body);
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    if (!name || name.length > 120) throw new BadRequestException('Укажите название длиной до 120 символов');
+    if (await this.materials.exist({ where: { creatorId: currentUserId, status: InsulationMaterialStatus.Draft } })) {
+      throw new ConflictException('У пользователя уже есть черновик');
+    }
+    const imageName = image ? await this.storage.upload(image, 'image') : null;
+    let videoName: string | null = null;
+    try {
+      videoName = video ? await this.storage.upload(video, 'video') : null;
+      const material = await this.materials.save(this.materials.create({
+        name, imageUrl: imageName, videoUrl: videoName, creatorId: currentUserId, status: InsulationMaterialStatus.Draft,
+      }));
+      return this.serializer.serialize(material, { currentUserId });
+    } catch (error) {
+      await Promise.all([this.storage.remove(imageName), this.storage.remove(videoName)]);
+      throw error;
+    }
+  }
+
+  async updateDraft(currentUserId: number, rawId: string, body: Record<string, unknown>) {
+    this.rejectSystemFields(body);
+    if (!/^[1-9]\d*$/.test(rawId)) throw new NotFoundException('Черновик не найден');
+    const material = await this.materials.findOneBy({ insulationMaterialId: Number(rawId), status: InsulationMaterialStatus.Draft });
+    if (!material) throw new NotFoundException('Черновик не найден');
+    if (material.creatorId !== currentUserId) throw new ForbiddenException('Можно изменить только свой черновик');
+    const shortDescription = typeof body.shortDescription === 'string' ? body.shortDescription.trim() : '';
+    const insulationType = typeof body.insulationType === 'string' ? body.insulationType.trim() : '';
+    const thicknessMm = Number(body.thicknessMm);
+    const priceRubM2 = Number(body.priceRubM2);
+    if (!shortDescription || shortDescription.length > 300) throw new BadRequestException('Описание: 1–300 символов');
+    if (!insulationType || insulationType.length > 50) throw new BadRequestException('Тип: 1–50 символов');
+    if (!Number.isInteger(thicknessMm) || thicknessMm < 1 || thicknessMm > 1000) throw new BadRequestException('Толщина: 1–1000 мм');
+    if (!Number.isFinite(priceRubM2) || priceRubM2 <= 0) throw new BadRequestException('Цена должна быть больше нуля');
+    material.shortDescription = shortDescription;
+    material.insulationType = insulationType;
+    material.thicknessMm = thicknessMm;
+    material.priceRubM2 = priceRubM2.toFixed(2);
+    material.brand = typeof body.brand === 'string' && body.brand.trim() ? body.brand.trim().slice(0, 100) : 'ТЕПЛОЩИТ';
+    material.application = typeof body.application === 'string' && body.application.trim() ? body.application.trim().slice(0, 150) : 'Теплоизоляция здания';
+    await this.materials.save(material);
+    return this.serializer.serialize(material, { currentUserId });
   }
 
   async create(currentUserId: number, body: CreateMaterialInput, image: UploadedMediaFile | undefined, video: UploadedMediaFile | undefined) {
